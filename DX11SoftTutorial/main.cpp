@@ -1,13 +1,37 @@
-#include <Windows.h>
+#pragma comment(lib, "d3d11.lib")
 
-// Helper variables/constants.
+#include <Windows.h>
+#include <d3d11.h>
+#include <DirectXMath.h>
+
+using namespace DirectX;
+
+// Global declarations.
+IDXGISwapChain* SwapChain;
+ID3D11Device* d3d11Device;
+ID3D11DeviceContext* d3d11DeviceContext;
+ID3D11RenderTargetView* renderTargetView;
+
+float red = 0.0f;
+float green = 0.0f;
+float blue = 0.0f;
+int colormodr = 1;
+int colormodg = 1;
+int colormodb = 1;
+
 LPCTSTR WndClassName = "FirstWindow";	// Define our window class name.
 HWND hwnd = NULL;						// Sets our window handle to null.
 
 const int Width = 800;	// Window width.
 const int Height = 600;	// Window height.
 
-// Helper Functions.
+// Function prototypes.
+bool InitializeDirect3d11App( HINSTANCE hInstance );
+void ReleaseObjects();
+bool InitScene();
+void UpdateScene();
+void DrawScene();
+
 bool InitializeWindow( HINSTANCE hInstance,
 	int ShowWnd,
 	int width, int height,
@@ -34,8 +58,18 @@ int WINAPI WinMain( HINSTANCE hInstance,
 		return 0;
 	}
 
+	// Initialize Direct3D.
+	if ( !InitializeDirect3d11App( hInstance ) )
+	{
+		MessageBox( 0, "Scene Initializtion - Failed",
+			"Error", MB_OK );
+		return 0;
+	}
+
 	// Main loop.
 	MessageLoop();
+
+	ReleaseObjects();
 
 	return 0;
 }
@@ -49,7 +83,7 @@ bool InitializeWindow( HINSTANCE hInstance,
 
 	WNDCLASSEX wc = {};
 
-	wc.cbSize = sizeof( wc );
+	wc.cbSize = sizeof( WNDCLASSEX );
 	wc.style = CS_HREDRAW | CS_VREDRAW;
 	wc.lpfnWndProc = WndProc;
 	wc.cbClsExtra = NULL;
@@ -92,6 +126,94 @@ bool InitializeWindow( HINSTANCE hInstance,
 	return true;
 }
 
+bool InitializeDirect3d11App( HINSTANCE hInstance )
+{
+	HRESULT hr;
+
+	// Describe our Buffer.
+	DXGI_MODE_DESC bufferDesc;
+
+	ZeroMemory( &bufferDesc, sizeof( DXGI_MODE_DESC ) );
+
+	bufferDesc.Width = Width;
+	bufferDesc.Height = Height;
+	bufferDesc.RefreshRate.Numerator = 60;
+	bufferDesc.RefreshRate.Denominator = 1;
+	bufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	bufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
+	bufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
+
+	// Describe our SwapChain.
+	DXGI_SWAP_CHAIN_DESC swapChainDesc;
+
+	ZeroMemory( &swapChainDesc, sizeof( DXGI_SWAP_CHAIN_DESC ) );
+
+	swapChainDesc.BufferDesc = bufferDesc;
+	swapChainDesc.SampleDesc.Count = 1;
+	swapChainDesc.SampleDesc.Quality = 0;
+	swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+	swapChainDesc.BufferCount = 1;
+	swapChainDesc.OutputWindow = hwnd;
+	swapChainDesc.Windowed = TRUE;
+	swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+
+	// Create our SwapChain.
+	hr = D3D11CreateDeviceAndSwapChain( NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, NULL, NULL, NULL,
+		D3D11_SDK_VERSION, &swapChainDesc, &SwapChain, &d3d11Device, NULL, &d3d11DeviceContext );
+
+	// Create our BackBuffer.
+	ID3D11Texture2D* BackBuffer;
+	hr = SwapChain->GetBuffer( 0, __uuidof( ID3D11Texture2D ), (void**)&BackBuffer );
+
+	// Create our Render Target.
+	hr = d3d11Device->CreateRenderTargetView( BackBuffer, NULL, &renderTargetView );
+	BackBuffer->Release();
+
+	// Set our Render Target.
+	d3d11DeviceContext->OMSetRenderTargets( 1, &renderTargetView, NULL );
+
+	return true;
+}
+
+void ReleaseObjects()
+{
+	// Release the COM Objects we created.
+	SwapChain->Release();
+	d3d11Device->Release();
+	d3d11DeviceContext->Release();
+}
+
+bool InitScene()
+{
+	return true;
+}
+
+void UpdateScene()
+{
+	//Update the colors of our scene
+	red += colormodr * 0.00005f;
+	green += colormodg * 0.00002f;
+	blue += colormodb * 0.00001f;
+
+	if ( red >= 1.0f || red <= 0.0f )
+		colormodr *= -1;
+	if ( green >= 1.0f || green <= 0.0f )
+		colormodg *= -1;
+	if ( blue >= 1.0f || blue <= 0.0f )
+		colormodb *= -1;
+}
+
+void DrawScene()
+{
+	// Clear our backbuffer to the updated color.
+	XMFLOAT4 bgColor( red, green, blue, 1.0f );
+
+	d3d11DeviceContext->ClearRenderTargetView( renderTargetView, (FLOAT*)&bgColor );
+
+	// Present the backbuffer to the screen.
+	SwapChain->Present( 0, 0 );
+}
+
 // The main message loop.
 int MessageLoop()
 {
@@ -110,7 +232,8 @@ int MessageLoop()
 		}
 		else
 		{
-			// Run game code.
+			UpdateScene();
+			DrawScene();
 		}
 	}
 	// Return the message.
@@ -128,19 +251,15 @@ LRESULT CALLBACK WndProc( HWND hwnd,
 	{
 		case WM_KEYDOWN:
 		{
-			if ( wParam == VK_ESCAPE )
-			{
-				if ( MessageBox( 0, "Are you sure you want to exit?",
-					"Really?", MB_YESNO | MB_ICONQUESTION ) == IDYES )
-					
-					// Release the window's allocated memory.
-					DestroyWindow( hwnd );
-				break;
+			if ( wParam == VK_ESCAPE ) {
+				DestroyWindow( hwnd );
 			}
+			return 0;
 		}
 		case WM_DESTROY:
 		{
 			PostQuitMessage( 0 );
+			return 0;
 		}
 	}
 	// Return the message for windows to handle it.
