@@ -111,7 +111,7 @@ bool InitializeWindow( HINSTANCE hInstance,
 	WNDCLASSEX wc = {};
 
 	wc.cbSize = sizeof( WNDCLASSEX );
-	wc.style = CS_HREDRAW | CS_VREDRAW;
+	wc.style = CS_OWNDC;
 	wc.lpfnWndProc = WndProc;
 	wc.cbClsExtra = 0;
 	wc.cbWndExtra = 0;
@@ -134,7 +134,7 @@ bool InitializeWindow( HINSTANCE hInstance,
 	// Creating the window. 
 	hwnd = CreateWindowEx( 0, WndClassName,
 		"A Very Interesting Title",
-		WS_OVERLAPPEDWINDOW,
+		WS_CAPTION | WS_MINIMIZEBOX | WS_SYSMENU,
 		CW_USEDEFAULT, CW_USEDEFAULT, width, height,
 		nullptr, nullptr, hInstance, nullptr );
 
